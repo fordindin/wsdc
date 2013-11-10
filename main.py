@@ -9,14 +9,21 @@ import sys
 import time
 import sqlite3 as lite
 import re
+import httplib
 
 
 def getpage(url, data=None, headers={}):
 		if data: data = urllib.urlencode(data)
 		#auth(config.login)
 		#req = urllib2.urlopen(url)
+		response = False
 		req = urllib2.Request(url, data, headers)
-		response = urllib2.urlopen(req)
+		while not response:
+				try:
+						response = urllib2.urlopen(req)
+				except httplib.BadStatusLine:
+						print "sleep"
+						time.sleep(1)
 		return json.loads(response.read())
 
 def act(action, param):
@@ -33,26 +40,28 @@ def p_sort(a,b):
 		elif a.start_date < b.start_date: return 1
 		else: return 0
 
-"""
-create table dancers (
-uid integer,
-first_name varchar,
-last_name varchar,
-role varchar,
-ename varchar,
-placement varchar,
-points integer,
-start_date datetime,
-end_date datetime,
-location varchar,
-division varchar,
-tier varchar
-);
-"""
 
-def main():
+def sync_db():
 		con = lite.connect('wsdc.sqlite')
+		q = """
+		create table dancers (
+		uid integer,
+		first_name varchar,
+		last_name varchar,
+		role varchar,
+		ename varchar,
+		placement varchar,
+		points integer,
+		start_date datetime,
+		end_date datetime,
+		location varchar,
+		division varchar,
+		tier varchar
+		);
+		"""
 		cur = con.cursor()
+		cur.execute("drop table if exists dancers;")
+		cur.execute(q)
 		#uid = act("get_id", "Puzanova")[0]['value']
 		all_ids = act("get_id","")
 		total = len(all_ids)
@@ -75,7 +84,7 @@ def main():
 				last_name_match = re.match("(.*), .*", dname)
 				if last_name_match: last_name = last_name_match.groups()[0]
 				else: last_name = ""
-				#print str(curr)+"/"+str(total)
+				print str(curr)+"/"+str(total)
 				try:
 						data = WSDCDataParser(act("get_history", uid))
 				except DataParseError:
@@ -90,15 +99,15 @@ def main():
 						query = "INSERT INTO dancers VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
 						cur.execute(query,
 								(
-										int(uid),
-										first_name,
-										last_name,
+										p.wscid,
+										p.first_name,
+										p.last_name,
 										p.role,
 										p.name,
 										p.placement,
-										int(p.points),
-										time.strftime("%Y-%m-%d %H:%M:%S", p.start_date),
-										time.strftime("%Y-%m-%d %H:%M:%S", p.end_date),
+										p.points,
+										p.start_date,
+										p.end_date,
 										p.location,
 										p.division,
 										p.tier,
@@ -107,6 +116,22 @@ def main():
 						# print p.placement, p.tier, p.division, p.name, time.strftime("%m/%Y", p.start_date)
 		# http://swingdancecouncil.herokuapp.com/pages/dancer_search_by_fragment.json?term=She
 		con.close()
+
+def main():
+		con = lite.connect("wsdc.sqlite")
+		cur = con.cursor()
+		inlocal = set([ e[0] for e in cur.execute("select distinct uid from dancers").fetchall()])
+		inremote = set( int(e['value']) for e in act("get_id","") )
+		# if there new ids in database, it definitely was updated
+		diffline = len(inlocal.difference(inremote))
+		# assumed that usual event visitors in common all the same people,
+		# there is a HUGE probability they are getting points
+		# so taking 200 most-recent-points-gainers we can predict they will gain more
+		# points in consequent events. And this why we shouldn't check all the database, only
+		# some dancers
+		dancerscore = cur.execute("select distinct uid from dancers order by start_date desc limit 200;").fetchall()
+
+		#sync_db()
 
 if __name__ == '__main__':
 		main()

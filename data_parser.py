@@ -23,8 +23,8 @@ class DEvent:
 				self.name = eventdict["name"].replace("'","\\'")
 				self.placement = eventdict["result"]
 				self.points = int(eventdict["points"])
-				self.start_date = time.strptime(eventdict["start_date"], __TIMEFORMAT__)
-				self.end_date = time.strptime(eventdict["end_date"], __TIMEFORMAT__)
+				self.start_date = time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(eventdict["start_date"], __TIMEFORMAT__))
+				self.end_date = time.strftime("%Y-%m-%d %H:%M:%S", time.strptime(eventdict["end_date"], __TIMEFORMAT__))
 				self.location = eventdict["location"].replace("'","\'")
 				self.role = role
 				self.division = division
@@ -58,7 +58,7 @@ class DDivision:
 						self.placements.append(DEvent(e, self.role, self.name))
 
 		def points_in_division(self):
-				return self.points
+				return int(self.points)
 
 
 
@@ -67,7 +67,7 @@ class WSDCDataParser:
 		def __init__(self, indata):
 				self.indata = indata
 				self.name = self.indata["full_name"].replace("'","\\'")
-				self.wcsid = self.indata["wscid"]
+				self.wcsid = int(self.indata["wscid"])
 				self.results = None
 				first_name_match = re.match(".*, (.*)", self.name)
 
