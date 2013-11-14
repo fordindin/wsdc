@@ -67,7 +67,7 @@ class WSDCDataParser:
 		def __init__(self, indata):
 				self.indata = indata
 				self.name = self.indata["full_name"].replace("'","\\'")
-				self.wcsid = int(self.indata["wscid"])
+				self.wscid = int(self.indata["wscid"])
 				self.results = None
 				first_name_match = re.match(".*, (.*)", self.name)
 
