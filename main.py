@@ -11,6 +11,7 @@ import sqlite3 as lite
 import re
 import httplib
 
+DEBUG=True
 
 class Counter:
 		def __init__(self, initval=0):
@@ -36,7 +37,7 @@ def getpage(url, data=None, headers={}):
 		while not response:
 				try:
 						response = urllib2.urlopen(req)
-				except httplib.BadStatusLine,urllib2.HTTPError:
+				except:
 						print "sleep"
 						time.sleep(1)
 		return json.loads(response.read())
@@ -114,11 +115,14 @@ def sync_db():
 		prepare_table(cur, "dancers")
 		all_ids = act("get_id","")
 		total = len(all_ids)
+		if DEBUG:
+				print total
 		c = Counter()
 		for e in all_ids:
 				uid = e['value']
-				#if c.inc()%10 == 0:
-						#print "% 7d/%d" % (c.counter,total)
+				if DEBUG:
+						if c.inc()%10 == 0:
+								print "% 7d/%d" % (c.counter,total)
 				if not add_entries(cur, 'dancers', uid): continue
 		con.commit()
 		con.close()
@@ -129,12 +133,16 @@ def main():
 		dcore_lim = 100;
 		con = lite.connect("wsdc.sqlite")
 		cur = con.cursor()
-		last_event = cur.execute("select ename,location,start_date from dancers order by start_date desc limit 1").fetchall()[0]
-		inlocal = set([ e[0] for e in cur.execute("select distinct uid from dancers").fetchall()])
-		inremote = set( int(e['value']) for e in act("get_id","") )
-		# if there new ids in database, it definitely was updated
-		difflen = len(inlocal.difference(inremote))
-		# assumed that usual event visitors in common all the same people,
+		try:
+				last_event = cur.execute("select ename,location,start_date from dancers order by start_date desc limit 1").fetchall()[0]
+				inlocal = set([ e[0] for e in cur.execute("select distinct uid from dancers").fetchall()])
+				inremote = set( int(e['value']) for e in act("get_id","") )
+				# if there new ids in database, it definitely was updated
+				difflen = len(inlocal.difference(inremote))
+		except (lite.OperationalError, IndexError):
+				prepare_table(cur, "dancers", temporary=False)
+				difflen = 1
+		# assuming that usual event visitors in common all the same people,
 		# there is a HUGE probability they are getting points
 		# so taking 200 most-recent-points-gainers we can predict they will gain more
 		# points in consequent events. And this why we shouldn't check all the database, only
@@ -153,6 +161,8 @@ def main():
 						con.close()
 						sync_db()
 						print "Sync done!"
+				else:
+						print "No new events"
 
 		else:
 				print "Non-zero difflen, syncing db"
